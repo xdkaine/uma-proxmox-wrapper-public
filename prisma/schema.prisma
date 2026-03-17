@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// Initial Model - Can be expanded later for users/settings
+// HIGH-5: Using native Json type instead of Text for better type safety
+model AppConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json     // Changed from @db.Text - Prisma handles JSON serialization
+  updatedAt DateTime @updatedAt
+}
+
+// Notification Model - System-wide alerts/notifications
+model Notification {
+  id        String   @id @default(cuid())
+  message   String   @db.Text
+  type      String   @default("info") // info, warning, error, success
+  isActive  Boolean  @default(true)
+  priority  Int      @default(0) // Higher numbers show first
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Audit Log Model - Comprehensive system logging
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?  // Nullable because system actions or deleted users might have logs
+  username  String   // Snapshot of username at time of action
+  action    String   // e.g., "LOGIN", "VM_START", "UPDATE_SETTINGS"
+  resource  String   // e.g., "vm-100", "system", "user-123"
+  details   Json     // Snapshot of changes or metadata
+  ipAddress String?
+  userAgent String?
+  status    String   @default("SUCCESS") // SUCCESS, FAILURE, WARNING
+  createdAt DateTime @default(now())
+  
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+
+}
+
+// Docs Model - Admin posted threads/articles
+model Doc {
+  id          String   @id @default(cuid())
+  title       String
+  subtitle    String?
+  author      String   // "By XYZ"
+  content     String   @db.LongText // Markdown content
+  coverImage  String?  // URL to image
+  visitedBy   Int      @default(0) // Counter for visits
+  published   Boolean  @default(true)
+  pinned      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
+// User Model - For settings and messaging
+model User {
+  id            String    @id @default(cuid())
+  username      String    @unique
+  displayName   String?
+  avatar        String?
+  
+  // Settings (JSON for flexibility)
+  settings      Json?
+
+  // Relations
+  sentMessages      Message[] @relation("SentMessages")
+  receivedMessages  Message[] @relation("ReceivedMessages")
+  blockedUsers      Block[]   @relation("UserBlocks")
+  blockedBy         Block[]   @relation("BlockedBy")
+  reactions         Reaction[]
+
+  // Group Relations
+  groups        Group[]   @relation("GroupMembers")
+  adminGroups   Group[]   @relation("GroupAdmins")
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// Group Model
+model Group {
+  id          String    @id @default(cuid())
+  name        String
+  avatar      String?
+  
+  members     User[]    @relation("GroupMembers")
+  admins      User[]    @relation("GroupAdmins")
+  messages    Message[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// Message Model - Chat history
+model Message {
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  senderId  String
+  sender    User     @relation("SentMessages", fields: [senderId], references: [id])
+  
+  // Direct Message Receptor
+  receiverId String?
+  receiver  User?    @relation("ReceivedMessages", fields: [receiverId], references: [id])
+
+  // Group Message Receptor
+  groupId   String?
+  group     Group?   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  
+  read      Boolean  @default(false)
+  delivered Boolean  @default(false)
+  
+  // Advanced Features
+  editedAt  DateTime? // If set, message was edited
+  deletedAt DateTime? // Soft delete
+  replyToId String?
+  replyTo   Message?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replies   Message[] @relation("MessageReplies")
+  
+  type      String    @default("text") // text, image, file
+  metadata  Json?     // Extra data like file size, dimensions, etc.
+
+  reactions Reaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([groupId])
+}
+
+// Reaction Model
+model Reaction {
+  id        String   @id @default(cuid())
+  emoji     String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([userId, messageId, emoji]) // User can react with same emoji once per message
+  @@index([messageId])
+}
+
+// Block Model - User blocking
+model Block {
+  id        String   @id @default(cuid())
+  blockerId String
+  blocker   User     @relation("UserBlocks", fields: [blockerId], references: [id])
+  blockedId String
+  blocked   User     @relation("BlockedBy", fields: [blockedId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+}
+
+// Whiteboard State - Shared collaborative canvas (stores stroke array as JSON)
+model WhiteboardState {
+  id        String   @id @default("default")
+  elements  Json     @default("[]")
+  updatedAt DateTime @updatedAt
+}
+
+// Pool Limit Model - Resource quotas for pools
+model PoolLimit {
+  id        String   @id @default(cuid())
+  poolId    String   @unique
+  maxVMs    Int      @default(0) // 0 = unlimited
+  maxLXCs   Int      @default(0)
+  maxVnets  Int      @default(0)
+  maxCpu    Int      @default(0)
+  maxMemory Int      @default(0) // in MB
+  maxDisk   Int      @default(0) // in GB
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

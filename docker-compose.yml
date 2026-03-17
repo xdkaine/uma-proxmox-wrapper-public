@@ -1,0 +1,73 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: proxmox-wrapper
+    container_name: proxmox-wrapper
+    ports:
+      - "3003:3003"
+    env_file:
+      - .env.local
+    environment:
+      # Ensure these are set if not provided by .env.local
+      - NODE_ENV=production
+      - USE_SECURE_COOKIE=true
+      # - HOSTNAME=proxmox-wrapper
+      - DATABASE_URL=mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE}
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-changeme_redis_password}@redis:6379
+    restart: unless-stopped
+    networks:
+      - proxmox-net
+    volumes:
+      - ./public/uploads:/app/public/uploads
+    depends_on:
+      - db
+      - redis
+
+  db:
+    image: mariadb:11.4
+    container_name: proxmox-db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    # Database port is NOT exposed to host — only accessible within docker network
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - proxmox-net
+
+  # HIGH-2: Redis for persistent rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: proxmox-redis
+    restart: always
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:-changeme_redis_password}
+    networks:
+      - proxmox-net
+    volumes:
+      - redis_data:/data
+  # phpmyadmin:
+  #   image: phpmyadmin/phpmyadmin
+  #   container_name: proxmox-phpmyadmin
+  #   environment:
+  #     PMA_HOST: db
+  #     PMA_PORT: 3306
+  #   ports:
+  #     - "8080:80"
+  #   networks:
+  #     - proxmox-net
+  #   depends_on:
+  #     - db
+
+volumes:
+  db_data:
+  redis_data:
+
+
+networks:
+  proxmox-net:
+    driver: bridge
