@@ -69,12 +69,12 @@ export function PausableMedia({ src, alt, className, ...props }: PausableMediaPr
                 <div className={cn("relative group overflow-hidden", (props as any).fill && "w-full h-full", className)}>
                     
                     {/* Media Layer (visually hidden when isHidden is true, but NOT unmounted to preserve pause canvas state) */}
-                    <div className={cn("w-full h-full absolute inset-0 transition-opacity duration-200", isHidden ? "opacity-0 pointer-events-none" : "opacity-100")}>
+                    <div className={cn("transition-opacity duration-200", (props as any).fill ? "w-full h-full absolute inset-0" : "w-full", isHidden ? "opacity-0 pointer-events-none" : "opacity-100")}>
                         {mediaType === "video" ? (
                             <video
                                 ref={videoRef}
                                 src={src}
-                                className={cn("object-cover w-full h-full")}
+                                className={cn("w-full object-cover", (props as any).fill ? "h-full" : "h-auto")}
                                 loop
                                 muted
                                 autoPlay
@@ -88,7 +88,7 @@ export function PausableMedia({ src, alt, className, ...props }: PausableMediaPr
                                     ref={imageRef}
                                     src={src}
                                     alt={alt}
-                                    className={cn("w-full h-full object-cover", isPaused ? "invisible opacity-0 absolute top-0 left-0" : "")}
+                                    className={cn("w-full object-cover", (props as any).fill ? "h-full" : "h-auto", isPaused ? "invisible opacity-0 absolute top-0 left-0" : "")}
                                     {...props}
                                     unoptimized={!!src.endsWith('.gif') || src.startsWith('/uploads')} // Unoptimize local uploads and GIFs
                                 />
@@ -96,7 +96,7 @@ export function PausableMedia({ src, alt, className, ...props }: PausableMediaPr
                                 {/* The "Paused" Canvas */}
                                 <canvas
                                     ref={canvasRef}
-                                    className={cn("w-full h-full object-cover", !isPaused ? "hidden" : "block")}
+                                    className={cn("w-full object-cover", (props as any).fill ? "h-full" : "h-auto", !isPaused ? "hidden" : "block")}
                                 />
                             </>
                         )}
