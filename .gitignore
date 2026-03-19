@@ -42,7 +42,10 @@ yarn-error.log*
 next-env.d.ts
 
 
-# xd
+# agents
 .agent
 .agents
 .claude
+
+# user uploads
+/public/uploads/
